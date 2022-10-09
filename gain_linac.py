@@ -1,7 +1,7 @@
 from time import sleep
 
 import numpy as np
-from cothread.catools import caget, caput
+from cothread.catools import caget, camonitor, caput
 from epics import caget_many
 from lcls_tools.superconducting.scLinac import Cavity, CryoDict, Piezo, SSA, StepperTuner
 from numpy import arctan, pi
@@ -18,7 +18,11 @@ class GainCavity(Cavity):
     def __init__(self, cavityNum, rackObject, ssaClass=SSA,
                  stepperClass=StepperTuner, piezoClass=Piezo):
         super().__init__(cavityNum, rackObject)
-        self.clip_count_pv = self.pvPrefix + "FB_SUM_CNTT"
+        self.feedback_clip_pvs = [self.pvPrefix + "PHAFB_HSUM",
+                                  self.pvPrefix + "PHAFB_LSUM",
+                                  self.pvPrefix + "AMPFB_HSUM",
+                                  self.pvPrefix + "AMPFB_LSUM"]
+        self.clip_counter = 0
         self.stop_at_no_clips = False
     
     @property
@@ -57,25 +61,45 @@ class GainCavity(Cavity):
         print(fmt % (val, rv, suffix))
         return bad
     
+    def counter_callback(self, value):
+        if value != 0:
+            self.clip_counter += 1
+    
     def clip_count(self, secs_to_wait=20):
-        starting_count = caget(self.clip_count_pv)
+        subscriptions = []
+        for pv in self.feedback_clip_pvs:
+            subscriptions.append(camonitor(pv, self.counter_callback))
+        
         print(f"Waiting {secs_to_wait} seconds to see clips")
-        sleep(20)
-        return caget(self.clip_count_pv) - starting_count
+        for i in range(secs_to_wait):
+            if self.clip_counter > 0:
+                break
+            sleep(1)
+        
+        for subscription in subscriptions:
+            subscription.close()
+        
+        found_clips = self.clip_counter
+        self.clip_counter = 0
+        return found_clips
     
     def search(self, sys_hbw=1000):
         self.straighten_cheeto()
         self.optimize(sys_hbw)
         if self.clip_count() > 0:
+            print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
             self.search(sys_hbw - 500)
         else:
             if self.stop_at_no_clips:
+                print(f"{self} gains optimized")
                 return
             else:
+                print(f"No clips found for {self}, retrying")
                 self.search(sys_hbw + 1000)
     
     def optimize(self, sys_hbw):
+        print(f"Optimizing {self} at {sys_hbw} crossing")
         ctlr_zero_place = 0.25
         vfrac = self.volt_set / self.volt_fs
         
@@ -136,6 +160,7 @@ class GainCavity(Cavity):
         caput(self.pvPrefix + "REG_PHAFB_GAIN_I", round(phs_igain * iscale))
     
     def straighten_cheeto(self):
+        print(f"Straightening cheeto for {self}")
         aact = caget(self.pvPrefix + "AACTMEAN")
         if aact > 1:
             startVal = caget(self.pvPrefix + "SEL_POFF")
