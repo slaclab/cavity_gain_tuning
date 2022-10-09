@@ -1,8 +1,8 @@
 from time import sleep
 
 import numpy as np
-from cothread.catools import caget, camonitor, caput
-from epics import caget_many
+from cothread.catools import caget, caput
+from epics import caget_many, camonitor, camonitor_clear
 from lcls_tools.superconducting.scLinac import Cavity, CryoDict, Piezo, SSA, StepperTuner
 from numpy import arctan, pi
 from scipy.stats import siegelslopes
@@ -61,14 +61,13 @@ class GainCavity(Cavity):
         print(fmt % (val, rv, suffix))
         return bad
     
-    def counter_callback(self, value):
+    def counter_callback(self, value, **kwargs):
         if value != 0:
             self.clip_counter += 1
     
     def clip_count(self, secs_to_wait=20):
-        subscriptions = []
         for pv in self.feedback_clip_pvs:
-            subscriptions.append(camonitor(pv, self.counter_callback, all_updates=True))
+            camonitor(pv, self.counter_callback)
         
         print(f"Waiting {secs_to_wait} seconds to see clips")
         for i in range(secs_to_wait):
@@ -76,8 +75,8 @@ class GainCavity(Cavity):
                 break
             sleep(1)
         
-        for subscription in subscriptions:
-            subscription.close()
+        for pv in self.feedback_clip_pvs:
+            camonitor_clear(pv)
         
         found_clips = self.clip_counter
         self.clip_counter = 0
