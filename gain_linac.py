@@ -71,7 +71,7 @@ class GainCavity(Cavity):
         
         print(f"Waiting {secs_to_wait} seconds to see clips")
         for i in range(secs_to_wait):
-            if self.clip_counter > 0:
+            if self.clip_counter > 1:
                 break
             sleep(1)
         
@@ -80,6 +80,7 @@ class GainCavity(Cavity):
         
         found_clips = self.clip_counter
         self.clip_counter = 0
+        print(f"Found {found_clips} for {self}")
         return found_clips
     
     def search(self, sys_hbw=1000):
@@ -87,7 +88,7 @@ class GainCavity(Cavity):
         sleep(1)
         self.straighten_cheeto()
         sleep(2)
-        if self.clip_count() > 0:
+        if self.clip_count() > 1:
             print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
             self.search(sys_hbw - 500)
