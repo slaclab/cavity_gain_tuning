@@ -68,7 +68,7 @@ class GainCavity(Cavity):
     def clip_count(self, secs_to_wait=20):
         subscriptions = []
         for pv in self.feedback_clip_pvs:
-            subscriptions.append(camonitor(pv, self.counter_callback))
+            subscriptions.append(camonitor(pv, self.counter_callback, all_updates=True))
         
         print(f"Waiting {secs_to_wait} seconds to see clips")
         for i in range(secs_to_wait):
