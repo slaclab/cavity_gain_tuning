@@ -83,14 +83,14 @@ class GainCavity(Cavity):
         return found_clips
     
     def search(self, sys_hbw=1000):
-        self.straighten_cheeto()
-        sleep(2)
         self.optimize(sys_hbw)
         sleep(1)
+        self.straighten_cheeto()
+        sleep(2)
         if self.clip_count() > 0:
             print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
-            self.search(sys_hbw - 100)
+            self.search(sys_hbw - 500)
         else:
             if self.stop_at_no_clips:
                 print(f"{self} gains optimized")
@@ -98,7 +98,7 @@ class GainCavity(Cavity):
                 return
             else:
                 print(f"No clips found for {self}, retrying")
-                self.search(sys_hbw + 500)
+                self.search(sys_hbw + 1000)
     
     def optimize(self, sys_hbw):
         print(f"Optimizing {self} at {sys_hbw} crossing")
