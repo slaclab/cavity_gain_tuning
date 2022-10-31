@@ -65,7 +65,7 @@ class GainCavity(Cavity):
         if value != 0:
             self.clip_counter += 1
     
-    def clip_count(self, secs_to_wait=20):
+    def clip_count(self, secs_to_wait=10):
         for pv in self.feedback_clip_pvs:
             camonitor(pv, self.counter_callback)
         
@@ -83,23 +83,24 @@ class GainCavity(Cavity):
         print(f"Found {found_clips} for {self}")
         return found_clips
     
-    def search(self, sys_hbw=1000):
+    def search(self, sys_hbw=1000, time_to_wait=10):
         self.optimize(sys_hbw)
         sleep(1)
         self.straighten_cheeto()
         sleep(2)
-        if self.clip_count() > 1:
+        if self.clip_count(time_to_wait) > 1 and sys_hbw > 1000:
             print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
-            self.search(sys_hbw - 500)
+            self.search(sys_hbw - 500, time_to_wait=60)
         else:
             if self.stop_at_no_clips:
-                print(f"{self} gains optimized")
+                print(f"{self} gains optimized or crossing below 1000")
                 self.stop_at_no_clips = False
                 return
             else:
-                print(f"No clips found for {self}, retrying")
-                self.search(sys_hbw + 1000)
+                print(f"No clips found for {self} or crossing <= 1000,"
+                      f" increasing and retrying")
+                self.search(sys_hbw + 1000, time_to_wait=10)
     
     def optimize(self, sys_hbw):
         print(f"Optimizing {self} at {sys_hbw} crossing")
