@@ -2,7 +2,7 @@ from time import sleep
 
 import numpy as np
 from cothread.catools import caget, caput
-from epics import caget_many, camonitor, camonitor_clear
+from epics import PV, caget_many, camonitor, camonitor_clear
 from lcls_tools.superconducting.scLinac import Cavity, CryoDict, Piezo, SSA, StepperTuner
 from numpy import arctan, pi
 from scipy.stats import siegelslopes
@@ -24,6 +24,13 @@ class GainCavity(Cavity):
                                   self.pvPrefix + "AMPFB_LSUM"]
         self.clip_counter = 0
         self.stop_at_no_clips = False
+        self._script_input_pv: PV = None
+    
+    @property
+    def script_input_pv(self) -> PV:
+        if not self._script_input_pv:
+            self._script_input_pv = PV(self.pvPrefix + "FB_LOOP_FREQ_ZERODB")
+        return self._script_input_pv
     
     @property
     def freq(self):
@@ -67,6 +74,8 @@ class GainCavity(Cavity):
     
     def clip_count(self, secs_to_wait=10):
         for pv in self.feedback_clip_pvs:
+            # Trying to account for hard faults
+            self.counter_callback(caget(pv))
             camonitor(pv, self.counter_callback)
         
         print(f"Waiting {secs_to_wait} seconds to see clips")
@@ -88,14 +97,15 @@ class GainCavity(Cavity):
         sleep(1)
         self.straighten_cheeto()
         sleep(2)
-        if self.clip_count(time_to_wait) > 1 and sys_hbw > 1000:
+        if self.clip_count(time_to_wait) > 1 and sys_hbw > 500:
             print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
             self.search(sys_hbw - 500, time_to_wait=60)
         else:
             if self.stop_at_no_clips:
-                print(f"{self} gains optimized or crossing below 1000")
+                print(f"{self} gains optimized or crossing below 500")
                 self.stop_at_no_clips = False
+                self.script_input_pv.put(sys_hbw)
                 return
             else:
                 print(f"No clips found for {self} or crossing <= 1000,"
