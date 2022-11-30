@@ -74,6 +74,9 @@ class GainCavity(Cavity):
     
     def clip_count(self, secs_to_wait=10):
         for pv in self.feedback_clip_pvs:
+            # Attempt at catching hard faults
+            self.counter_callback(caget(pv))
+            
             camonitor(pv, self.counter_callback)
         
         print(f"Waiting {secs_to_wait} seconds to see clips")
