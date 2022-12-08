@@ -15,6 +15,7 @@ class GainTuningGUI(Display):
         
         self.ui.cm_combobox.currentIndexChanged.connect(self.update_cryomodule)
         self.ui.optimize_button.clicked.connect(self.optimize)
+        self.ui.cav_spinbox.valueChanged.connect(self.update_channels)
     
     @pyqtSlot(int)
     def update_cryomodule(self, idx: int):
@@ -22,10 +23,10 @@ class GainTuningGUI(Display):
             self.cryomodule = None
         else:
             self.cryomodule = GAIN_CRYOMODULES[self.ui.cm_combobox.currentText()]
-            self.update_channels()
+            self.update_channels(self.ui.cav_spinbox.value())
     
-    def update_channels(self):
-        cav_num = self.ui.cav_spinbox.value()
+    @pyqtSlot(int)
+    def update_channels(self, cav_num: int):
         cavity: GainCavity = self.cryomodule.cavities[cav_num]
         self.ui.phase_high_byte.channel = cavity.phase_high_pv_str
         self.ui.phase_high_label.channel = cavity.phase_high_pv_str
