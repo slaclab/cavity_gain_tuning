@@ -1,11 +1,9 @@
 from time import sleep
 
-import numpy as np
 from cothread.catools import caget, caput
-from epics import PV, caget_many, camonitor, camonitor_clear
+from epics import PV, camonitor, camonitor_clear
 from lcls_tools.superconducting.scLinac import Cavity, CryoDict, Piezo, SSA, StepperTuner
 from numpy import arctan, pi
-from scipy.stats import siegelslopes
 
 CHEETO_MULTIPLIER = -51.0471
 
@@ -18,10 +16,21 @@ class GainCavity(Cavity):
     def __init__(self, cavityNum, rackObject, ssaClass=SSA,
                  stepperClass=StepperTuner, piezoClass=Piezo):
         super().__init__(cavityNum, rackObject)
-        self.feedback_clip_pvs = [self.pvPrefix + "PHAFB_HSUM",
-                                  self.pvPrefix + "PHAFB_LSUM",
-                                  self.pvPrefix + "AMPFB_HSUM",
-                                  self.pvPrefix + "AMPFB_LSUM"]
+        
+        self.phase_high_pv_str = self.pvPrefix + "PHAFB_HSUM"
+        self.phase_low_pv_str = self.pvPrefix + "PHAFB_LSUM"
+        self.amp_high_pv_str = self.pvPrefix + "AMPFB_HSUM"
+        self.amp_low_pv_str = self.pvPrefix + "AMPFB_LSUM"
+        
+        self.amp_gain_p_pv_str = self.pvPrefix + "REG_AMPFB_GAIN_P"
+        self.amp_gain_i_pv_str = self.pvPrefix + "REG_AMPFB_GAIN_I"
+        self.phase_gain_p_pv_str = self.pvPrefix + "REG_PHAFB_GAIN_P"
+        self.phase_gain_i_pv_str = self.pvPrefix + "REG_PHAFB_GAIN_I"
+        
+        self.feedback_clip_pvs = [self.phase_high_pv_str,
+                                  self.phase_low_pv_str,
+                                  self.amp_high_pv_str,
+                                  self.amp_low_pv_str]
         self.clip_counter = 0
         self.stop_at_no_clips = False
         self._script_input_pv: PV = None
@@ -98,8 +107,7 @@ class GainCavity(Cavity):
     def search(self, sys_hbw=1000, time_to_wait=10):
         self.optimize(sys_hbw)
         sleep(1)
-        self.straighten_cheeto()
-        sleep(2)
+        
         if self.clip_count(time_to_wait) > 1 and sys_hbw > 500:
             print(f"Clips detected for {self}, backing off")
             self.stop_at_no_clips = True
@@ -171,33 +179,10 @@ class GainCavity(Cavity):
             print("Invalid configuration, not pushing")
             return
         
-        caput(self.pvPrefix + "REG_AMPFB_GAIN_P", round(amp_pgain * pscale))
-        caput(self.pvPrefix + "REG_AMPFB_GAIN_I", round(amp_igain * iscale))
-        caput(self.pvPrefix + "REG_PHAFB_GAIN_P", round(phs_pgain * pscale))
-        caput(self.pvPrefix + "REG_PHAFB_GAIN_I", round(phs_igain * iscale))
-    
-    def straighten_cheeto(self):
-        print(f"Straightening cheeto for {self}")
-        aact = caget(self.pvPrefix + "AACTMEAN")
-        if aact > 1:
-            startVal = caget(self.pvPrefix + "SEL_POFF")
-            nord = caget(self.pvPrefix + "DAC:NORD")
-            pvL = [self.pvPrefix + "CTRL:QWF", self.pvPrefix + "CTRL:IWF"]
-            [qwf, iwf] = caget_many(pvL, False, nord)
-            [slope, inter] = siegelslopes(iwf, qwf)
-            
-            if not np.isnan(slope):
-                step = slope * CHEETO_MULTIPLIER
-                if step > 5:
-                    step = 5
-                elif step < -5:
-                    step = -5
-                if startVal + step < -180:
-                    step = step + 360
-                elif startVal + step > 180:
-                    step = step - 360
-                
-                caput(self.pvPrefix + "SEL_POFF", startVal + step)
+        caput(self.amp_gain_p_pv_str, round(amp_pgain * pscale))
+        caput(self.amp_gain_i_pv_str, round(amp_igain * iscale))
+        caput(self.phase_gain_p_pv_str, round(phs_pgain * pscale))
+        caput(self.phase_gain_i_pv_str, round(phs_igain * iscale))
 
 
 GAIN_CRYOMODULES = CryoDict(cavityClass=GainCavity)
